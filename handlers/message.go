@@ -1,63 +1,52 @@
-package main
+package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"mychat/chat"
-	"time"
+	"mychat/db"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var dbPool *pgxpool.Pool
+var messageClient db.IMessageClient
 
-func initDB(conString string) error {
-	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var err error
-	dbPool, err = pgxpool.New(ctxTimeout, conString)
-	if err != nil {
-		return err
-	}
-
-	return dbPool.Ping(ctxTimeout)
+func InjectClient(client db.IMessageClient) {
+	messageClient = client
 }
 
-func messageDelete(c *gin.Context) {
+func MessageDelete(c *gin.Context) {
 	message := messageClient.Delete(c.Param("id"))
 	c.JSON(200, gin.H{
 		"message": message,
 	})
 }
 
-func messageDeleteAll(c *gin.Context) {
+func MessageDeleteAll(c *gin.Context) {
 	rowsDeleted := messageClient.DeleteAll()
 	c.JSON(200, gin.H{
 		"rowsDeleted": rowsDeleted,
 	})
 }
 
-func messageGet(c *gin.Context) {
+func MessageGet(c *gin.Context) {
 	message := messageClient.Read(c.Param("id"))
 	c.JSON(200, gin.H{
 		"message": message,
 	})
 }
 
-func messageGetAll(c *gin.Context) {
+func MessageGetAll(c *gin.Context) {
 	messages := messageClient.ReadAll()
 	c.JSON(200, gin.H{
 		"messages": messages,
 	})
 }
 
-func messagePostAndBroadcast(h *chat.Hub) gin.HandlerFunc {
+func MessagePostAndBroadcast(h *chat.Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		msg := messagePost(c)
+		msg := MessagePost(c)
 		jsonData, err := json.Marshal(msg)
 		if err != nil {
 			slog.Error("JSON serialization failed for object text:"+msg.Text, "error", err, "id", msg.ID)
@@ -66,8 +55,8 @@ func messagePostAndBroadcast(h *chat.Hub) gin.HandlerFunc {
 	}
 }
 
-func messagePost(c *gin.Context) *Message {
-	var msg Message
+func MessagePost(c *gin.Context) *db.Message {
+	var msg db.Message
 	if err := c.BindJSON(&msg); err != nil {
 		fmt.Print(err)
 		return nil

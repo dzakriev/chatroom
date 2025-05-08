@@ -10,6 +10,8 @@ import (
 
 	"mychat/chat"
 	"mychat/config"
+	"mychat/db"
+	"mychat/handlers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ilyakaznacheev/cleanenv"
@@ -37,8 +39,8 @@ func mustInitConfig() {
 }
 
 func mustInitDb() {
-	messageClient = MessageClientDb{}
-	err := initDB(cfg.DbConnectionString)
+	handlers.InjectClient(db.MessageClientDb{})
+	err := db.InitDB(cfg.DbConnectionString)
 	if err != nil {
 		slog.Error("failed to start db", "error", err)
 		os.Exit(1)
@@ -61,11 +63,11 @@ func initRouter() {
 		chat.ServeWs(hub, c.Writer, c.Request)
 	})
 
-	router.GET("/message", messageGetAll)
-	router.GET("/message/:id", messageGet)
-	router.POST("/message", messagePostAndBroadcast(hub))
-	router.DELETE("/message/:id", messageDelete)
-	router.DELETE("/message", messageDeleteAll)
+	router.GET("/message", handlers.MessageGetAll)
+	router.GET("/message/:id", handlers.MessageGet)
+	router.POST("/message", handlers.MessagePostAndBroadcast(hub))
+	router.DELETE("/message/:id", handlers.MessageDelete)
+	router.DELETE("/message", handlers.MessageDeleteAll)
 }
 
 func corsMiddleware() gin.HandlerFunc {
@@ -139,7 +141,7 @@ func waitForShutdown() {
 func shutdown() chan struct{} {
 	stopped := make(chan struct{})
 	go func() {
-		dbPool.Close()
+		db.DbPool.Close()
 		stopped <- struct{}{}
 	}()
 	return stopped
