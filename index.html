@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Let's Chat!</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --card: #1e1e1e;
+      --accent: #00bcd4;
+      --text: #f1f1f1;
+      --muted: #aaa;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 600px;
+      height: 90vh;
+      background-color: var(--card);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0, 188, 212, 0.3);
+    }
+
+    header {
+      padding: 1rem;
+      background-color: var(--accent);
+      text-align: center;
+      font-weight: bold;
+      font-size: 1.2rem;
+      color: #000;
+    }
+
+    main {
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .message {
+      background-color: #2a2a2a;
+      padding: 0.75rem 1rem;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text);
+    }
+
+    .delete-btn {
+      color: var(--muted);
+      cursor: pointer;
+      margin-left: 1rem;
+      font-weight: bold;
+      transition: color 0.2s;
+    }
+
+    .delete-btn:hover {
+      color: red;
+    }
+
+    footer {
+      display: flex;
+      padding: 1rem;
+      border-top: 1px solid #333;
+      background-color: #181818;
+    }
+
+    footer input {
+      flex: 1;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 5px;
+      margin-right: 0.5rem;
+      background-color: #2a2a2a;
+      color: var(--text);
+    }
+
+    footer button {
+      padding: 0.75rem 1.2rem;
+      border: none;
+      border-radius: 5px;
+      background-color: var(--accent);
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    footer button:hover {
+      background-color: #00acc1;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>⚡ Chat Room</header>
+    <main id="messages"></main>
+    <footer>
+      <input id="messageInput" type="text" placeholder="Type a message..." />
+      <button id="sendBtn">Send</button>
+    </footer>
+  </div>
+
+  <script>
+    function renderMessage(message) {
+      const msgElem = document.createElement('div');
+      msgElem.className = 'message';
+
+      const textElem = document.createElement('span');
+      textElem.textContent = message.text;
+
+      const deleteBtn = document.createElement('span');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.textContent = '✖';
+      deleteBtn.onclick = () => {
+        fetch(`http://localhost:8080/message/${message.id}`, { method: 'DELETE' })
+          .then(res => {
+            if (res.ok) msgElem.remove();
+            else console.error('Delete failed');
+          })
+          .catch(err => console.error(err));
+      };
+
+      msgElem.appendChild(textElem);
+      msgElem.appendChild(deleteBtn);
+      document.getElementById('messages').appendChild(msgElem);
+    }
+
+    fetch("http://localhost:8080/message")
+      .then((response) => response.json())
+      .then((result) => {
+        result.messages.forEach(renderMessage);
+      })
+      .catch((error) => console.error(error));
+
+    document.getElementById('sendBtn').addEventListener('click', () => {
+      const input = document.getElementById('messageInput');
+      const msg = input.value.trim();
+      if (msg) {
+        const body = JSON.stringify({ text: msg });
+        fetch("http://localhost:8080/message", {
+          method: "POST",
+          body: body,
+          headers: { 'Content-Type': 'application/json' },
+        })
+          .catch(error => console.error(error));
+        input.value = '';
+      }
+    });
+
+    const ws = new WebSocket('ws://localhost:8080/ws');
+    ws.onclose = () => {
+      const msgElem = document.createElement('div');
+      msgElem.textContent = "Connection closed";
+      document.getElementById("messages").appendChild(msgElem);
+    };
+
+    ws.onmessage = (msg) => {
+      console.log(msg)
+      const data = JSON.parse(msg.data);
+      renderMessage(data);
+    };
+
+    document.getElementById('messageInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('sendBtn').click();
+      }
+    });
+  </script>
+</body>
+
+</html>
