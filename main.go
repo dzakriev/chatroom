@@ -12,6 +12,7 @@ import (
 	"mychat/config"
 	"mychat/db"
 	"mychat/handlers"
+	"mychat/kafka"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ilyakaznacheev/cleanenv"
@@ -19,6 +20,7 @@ import (
 
 var cfg config.Config
 var router *gin.Engine
+var logFile *os.File
 
 func main() {
 	mustInitConfig()
@@ -68,6 +70,8 @@ func initRouter() {
 	router.POST("/message", handlers.MessagePostAndBroadcast(hub))
 	router.DELETE("/message/:id", handlers.MessageDelete)
 	router.DELETE("/message", handlers.MessageDeleteAll)
+
+	router.POST("/kafka/message", func() gin.HandlerFunc { return func(c *gin.Context) { kafka.Consume() } }())
 }
 
 func corsMiddleware() gin.HandlerFunc {
@@ -81,6 +85,15 @@ func corsMiddleware() gin.HandlerFunc {
 }
 
 func slogMiddleware() gin.HandlerFunc {
+	var err error
+	logFile, err = os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		slog.Error("failed to open log file: %v", "error", err)
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logFile, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})))
+
 	return func(c *gin.Context) {
 		start := time.Now()
 		path := c.Request.URL.Path
@@ -141,6 +154,7 @@ func waitForShutdown() {
 func shutdown() chan struct{} {
 	stopped := make(chan struct{})
 	go func() {
+		logFile.Close()
 		db.DbPool.Close()
 		stopped <- struct{}{}
 	}()
