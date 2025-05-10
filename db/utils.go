@@ -25,7 +25,7 @@ func InitDB(conString string) error {
 	return DbPool.Ping(ctxTimeout)
 }
 
-func (client MessageClientDb) Create(text string) Message {
+func (client *MessageClientDb) Create(text string) Message {
 	var id int
 	var err = DbPool.QueryRow(context.Background(), "insert into message (text) values ($1) returning id", text).Scan(&id)
 	if err != nil {
@@ -37,7 +37,7 @@ func (client MessageClientDb) Create(text string) Message {
 	return msg
 }
 
-func (client MessageClientDb) Delete(id string) Message {
+func (client *MessageClientDb) Delete(id string) Message {
 	var msg Message
 	err := DbPool.QueryRow(context.Background(), "delete from message where id=$1 returning id, text", id).Scan(&msg.ID, &msg.Text)
 	if err != nil {
@@ -47,7 +47,7 @@ func (client MessageClientDb) Delete(id string) Message {
 	return msg
 }
 
-func (client MessageClientDb) DeleteAll() int {
+func (client *MessageClientDb) DeleteAll() int {
 	commandTag, err := DbPool.Exec(context.Background(), "delete from message")
 	if err != nil {
 		slog.Error("Deleting message failed", "error", err)
@@ -56,7 +56,7 @@ func (client MessageClientDb) DeleteAll() int {
 	return int(commandTag.RowsAffected())
 }
 
-func (client MessageClientDb) Read(id string) Message {
+func (client *MessageClientDb) Read(id string) Message {
 	var msg Message
 	err := DbPool.QueryRow(context.Background(), "select id, text from message where id=$1", id).Scan(&msg.ID, &msg.Text)
 	if err != nil {
@@ -66,7 +66,7 @@ func (client MessageClientDb) Read(id string) Message {
 	return msg
 }
 
-func (client MessageClientDb) ReadAll() []Message {
+func (client *MessageClientDb) ReadAll() []Message {
 	rows, err := DbPool.Query(context.Background(), "select id, text from message")
 	if err != nil {
 		slog.Error("Reading failed", "error", err)

@@ -12,6 +12,7 @@ import (
 	"mychat/config"
 	"mychat/db"
 	"mychat/handlers"
+	"mychat/handlers/grpc"
 	"mychat/kafka"
 
 	"github.com/gin-gonic/gin"
@@ -41,7 +42,7 @@ func mustInitConfig() {
 }
 
 func mustInitDb() {
-	handlers.InjectClient(db.MessageClientDb{})
+	handlers.InjectClient(&db.MessageClientDb{})
 	err := db.InitDB(cfg.DbConnectionString)
 	if err != nil {
 		slog.Error("failed to start db", "error", err)
@@ -70,6 +71,7 @@ func initRouter() {
 	router.POST("/message", handlers.MessagePostAndBroadcast(hub))
 	router.DELETE("/message/:id", handlers.MessageDelete)
 	router.DELETE("/message", handlers.MessageDeleteAll)
+	router.GET("/auth", grpc.SendAuth)
 
 	router.POST("/kafka/message", func() gin.HandlerFunc { return func(c *gin.Context) { kafka.Consume() } }())
 }
