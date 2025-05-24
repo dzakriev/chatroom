@@ -1,0 +1,19 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/app.log
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  username: "elastic"
+  password: ""  # No password if xpack is disabled
+
+setup.kibana:
+  host: "kibana:5601"
+
+# Optional: write logs to stdout for debugging
+logging:
+  level: info
+  to_files: false
+  to_stdout: true
