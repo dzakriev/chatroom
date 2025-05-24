@@ -23,8 +23,8 @@ type UserInRoom struct {
 
 type IMessageClient interface {
 	Create(id string) Message
-	Read(id string) Message
+	Read(id string) (Message, bool)
 	ReadAll() []Message
-	Delete(id string) Message
+	Delete(id string) (Message, bool)
 	DeleteAll() int
 }

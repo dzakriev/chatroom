@@ -37,14 +37,17 @@ func (client *MessageClientDb) Create(text string) Message {
 	return msg
 }
 
-func (client *MessageClientDb) Delete(id string) Message {
+func (client *MessageClientDb) Delete(id string) (Message, bool) {
 	var msg Message
+	found := true
+
 	err := DbPool.QueryRow(context.Background(), "delete from message where id=$1 returning id, text", id).Scan(&msg.ID, &msg.Text)
 	if err != nil {
 		slog.Error("Deleting message failed", "error", err)
+		found = false
 	}
 
-	return msg
+	return msg, found
 }
 
 func (client *MessageClientDb) DeleteAll() int {
@@ -56,14 +59,17 @@ func (client *MessageClientDb) DeleteAll() int {
 	return int(commandTag.RowsAffected())
 }
 
-func (client *MessageClientDb) Read(id string) Message {
+func (client *MessageClientDb) Read(id string) (Message, bool) {
 	var msg Message
+	found := true
+
 	err := DbPool.QueryRow(context.Background(), "select id, text from message where id=$1", id).Scan(&msg.ID, &msg.Text)
 	if err != nil {
 		slog.Error("Reading message failed", "error", err, "id", id)
+		found = false
 	}
 
-	return msg
+	return msg, found
 }
 
 func (client *MessageClientDb) ReadAll() []Message {

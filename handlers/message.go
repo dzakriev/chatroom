@@ -17,7 +17,15 @@ func InjectClient(client db.IMessageClient) {
 }
 
 func MessageDelete(c *gin.Context) {
-	message := messageClient.Delete(c.Param("id"))
+	message, ok := messageClient.Delete(c.Param("id"))
+
+	if !ok {
+		c.JSON(404, gin.H{
+			"message": "Resource not found",
+		})
+		return
+	}
+
 	c.JSON(200, gin.H{
 		"message": message,
 	})
@@ -31,7 +39,15 @@ func MessageDeleteAll(c *gin.Context) {
 }
 
 func MessageGet(c *gin.Context) {
-	message := messageClient.Read(c.Param("id"))
+	message, ok := messageClient.Read(c.Param("id"))
+
+	if !ok {
+		c.JSON(404, gin.H{
+			"message": "Resource not found",
+		})
+		return
+	}
+
 	c.JSON(200, gin.H{
 		"message": message,
 	})

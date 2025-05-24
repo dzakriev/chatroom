@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -17,17 +18,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var cfg config.Config
 var router *gin.Engine
 var logFile *os.File
+var requestsTotal *prometheus.CounterVec
 
 func main() {
 	mustInitConfig()
 	mustInitDb()
+	mustInitMetrics()
+	mustInitRouter()
 
-	initRouter()
 	runServer()
 
 	waitForShutdown()
@@ -50,11 +54,24 @@ func mustInitDb() {
 	}
 }
 
-func initRouter() {
+func mustInitMetrics() {
+	requestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests.",
+		},
+		[]string{"status", "method", "handler"},
+	)
+	prometheus.MustRegister(requestsTotal)
+}
+
+func mustInitRouter() {
 	router = gin.New()
 	router.Use(corsMiddleware())
 	router.Use(slogMiddleware())
+	router.Use(metricsMiddleware())
 	router.Use(gin.Recovery())
+
 	router.LoadHTMLFiles(cfg.IndexFilePath)
 	router.GET("/", func(c *gin.Context) {
 		c.HTML(200, cfg.IndexFilePath, nil)
@@ -71,6 +88,9 @@ func initRouter() {
 	router.POST("/message", handlers.MessagePostAndBroadcast(hub))
 	router.DELETE("/message/:id", handlers.MessageDelete)
 	router.DELETE("/message", handlers.MessageDeleteAll)
+
+	router.GET("/metrics", handlers.PrometheusHandler())
+
 	router.GET("/auth", grpc.SendAuth)
 
 	router.POST("/kafka/message", func() gin.HandlerFunc { return func(c *gin.Context) { kafka.Consume() } }())
@@ -91,6 +111,7 @@ func slogMiddleware() gin.HandlerFunc {
 	logFile, err = os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		slog.Error("failed to open log file: %v", "error", err)
+		os.Exit(1)
 	}
 	slog.SetDefault(slog.New(slog.NewJSONHandler(logFile, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
@@ -98,8 +119,7 @@ func slogMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		start := time.Now()
-		path := c.Request.URL.Path
-		raw := c.Request.URL.RawQuery
+		path := c.FullPath()
 
 		c.Next()
 
@@ -108,10 +128,6 @@ func slogMiddleware() gin.HandlerFunc {
 		clientIP := c.ClientIP()
 		method := c.Request.Method
 		errorMessage := c.Errors.ByType(gin.ErrorTypePrivate).String()
-
-		if raw != "" {
-			path = path + "?" + raw
-		}
 
 		slog.Info("HTTP request",
 			"status", status,
@@ -124,10 +140,22 @@ func slogMiddleware() gin.HandlerFunc {
 	}
 }
 
+func metricsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.FullPath()
+		c.Next()
+
+		status := strconv.Itoa(c.Writer.Status())
+		method := c.Request.Method
+
+		requestsTotal.WithLabelValues(status, method, path).Inc()
+	}
+}
+
 func runServer() {
 	go func() {
 		slog.Info("Server is starting")
-		err := router.Run("localhost:8080")
+		err := router.Run("0.0.0.0:8080")
 		if err != nil {
 			slog.Error("Server starting failed", "error", err)
 			os.Exit(1)
@@ -151,12 +179,13 @@ func waitForShutdown() {
 	case <-ctx.Done():
 		slog.Info("Server forced to shutdown")
 	}
+
+	logFile.Close()
 }
 
 func shutdown() chan struct{} {
 	stopped := make(chan struct{})
 	go func() {
-		logFile.Close()
 		db.DbPool.Close()
 		stopped <- struct{}{}
 	}()
